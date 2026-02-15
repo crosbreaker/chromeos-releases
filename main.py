@@ -65,8 +65,8 @@ if __name__ == "__main__":
   print("Merging data sources")
   merged_data = merge_data(chrome100_data, *wayback_data, *git_data)
 
-  print("Fetching kernel versions from image data")
-  merged_data = kernver.get_kernel_versions(merged_data)
+  #print("Fetching kernel versions from image data")
+  #merged_data = kernver.get_kernel_versions(merged_data)
 
   print("Done!")
   data_path.mkdir(exist_ok=True)
