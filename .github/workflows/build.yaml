@@ -32,7 +32,7 @@ jobs:
       - name: download old artifacts
         run: |
           wget https://github.com/crosbreaker/chromeos-releases-data/raw/main/downloads.tgz
-          mkdir downloads
+          mkdir -p downloads
           tar xvf downloads.tgz -C downloads/
           rm -rf downloads.tgz
       
