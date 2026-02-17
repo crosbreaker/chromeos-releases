@@ -38,6 +38,14 @@ jobs:
           python3 -m venv .venv
           source .venv/bin/activate
           pip3 install -r requirements.txt
+
+      # inline because idk if gh workflows goes back to the old directory after every cmd like how makefile would
+      - name: download old artifacts
+        run: |
+          wget https://github.com/crosbreaker/chromeos-releases-data/raw/main/downloads.tgz
+          mkdir downloads
+          tar xvf downloads.tgz -C downloads/
+          rm -rf downloads.tgz
       
       - name: run build
         run: |
@@ -65,14 +73,22 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "<>"
           cd data
-          git clone "https://${{ secrets.GH_TOKEN }}@github.com/MercuryWorkshop/chromeos-releases-data" -b main
+          git clone "https://${{ secrets.GH_TOKEN }}@github.com/crosbreaker/chromeos-releases-data" -b main
           cd chromeos-releases-data
           cp ../data.json ./
           if [ ! "$(git status -s)" ]; then
             exit 0
           fi
           git add .
-          git commit -m "update data.json"
+          git commit -s -m "update data.json"
+          
+          cd ../../downloads
+          rm -rf ./git
+          tar -czf ../data/chromeos-releases-data/downloads.tgz ./
+          cd -
+          git add .
+          git commit -s -m "update downloads.tgz"
+
           git push origin main
 
   workflow-keepalive:

@@ -3,7 +3,7 @@ import json
 import time
 import re
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 import common
 import versions
@@ -37,11 +37,14 @@ def parse_wayback_cdx(cdx_data):
     last_digest = row[digest_index]
   return timestamps
 
-def fetch_wayback_cdx(cdx_api_url, path):
+def fetch_wayback_cdx(cdx_api_url, path, since=None):
   cdx_data_path = path / "cdx.json"
 
   if cdx_data_path.exists():
     cdx_json = json.loads(cdx_data_path.read_text())
+    cached_at = datetime.fromtimestamp(cdx_json["updated"], tz=timezone.utc)
+    if since and cached_at > since:
+      return cdx_json["data"]
     if time.time() - cdx_json["updated"] < 3600:
       return cdx_json["data"]
   
@@ -55,9 +58,9 @@ def fetch_wayback_cdx(cdx_api_url, path):
   cdx_data_path.write_text(json.dumps(cdx_json, indent=2))
   return cdx_data
 
-def fetch_wayback_snapshots(url, path):
+def fetch_wayback_snapshots(url, path, since=None):
   cdx_api_url = cdx_api_url_template.format(url=url)
-  cdx_data = fetch_wayback_cdx(cdx_api_url, path)
+  cdx_data = fetch_wayback_cdx(cdx_api_url, path, since=since)
 
   snapshots = []
   for timestamp in parse_wayback_cdx(cdx_data):
@@ -182,7 +185,7 @@ def fetch_modified_dates(data):
   dl_dates_path.write_text(json.dumps(dates, indent=2))
   common.dates.update(dates)
 
-def get_wayback_data():
+def get_wayback_data(since=None):
   data_sources = []
   downloads_path.mkdir(exist_ok=True)
 
@@ -191,7 +194,7 @@ def get_wayback_data():
     category_path.mkdir(exist_ok=True, parents=True)
 
     chrome_dash_url = chrome_dash_url_template.format(category=category)
-    dash_snapshots = fetch_wayback_snapshots(chrome_dash_url, category_path)
+    dash_snapshots = fetch_wayback_snapshots(chrome_dash_url, category_path, since=since)
 
     dash_data = parse_dash_snapshots(dash_snapshots)
     fetch_modified_dates(dash_data)
@@ -203,7 +206,7 @@ def get_wayback_data():
     recovery_path.mkdir(exist_ok=True, parents=True)
 
     recovery_url = recovery_json_url_template.format(filename=filename)
-    recovery_snapshots = fetch_wayback_snapshots(recovery_url, recovery_path)
+    recovery_snapshots = fetch_wayback_snapshots(recovery_url, recovery_path, since=since)
 
     recovery_data = prase_recovery_data(recovery_snapshots)
     fetch_modified_dates(recovery_data)

@@ -5,8 +5,9 @@ import functools
 
 import common
 
-#this module fetches chrome os version numbers from the MercuryWorkshop/chromeos-versions repo
+#this module fetches chrome os version numbers from the crosbreaker/chromeos-versions repo
 
+# TODO(kxtz): once we have a successful workflow run, change this to use our fork.
 versions_url = "https://nightly.link/MercuryWorkshop/chromeos-versions/workflows/build/main/data.zip"
 
 def fetch_all_versions():
