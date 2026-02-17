@@ -41,12 +41,13 @@ jobs:
           set -x
           source .venv/bin/activate
           python3 main.py
+          bash json2csv.sh data/data.json data/data.csv
 
       - name: upload database as an artifact
         uses: actions/upload-artifact@v4
         with:
           name: data
-          path: data/data.json
+          path: data/
           compression-level: 9
       
       - name: upload downloads as an artifact

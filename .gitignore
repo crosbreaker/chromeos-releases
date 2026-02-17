@@ -1,5 +1,7 @@
 /downloads
 /data
+data.json
+data.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -5,9 +5,9 @@ import functools
 
 import common
 
-#this module fetches chrome os version numbers from the crosbreaker/chromeos-versions repo
+#this module fetches chrome os version numbers from the crosbreaker/chromeos-releases repo
 
-versions_url = "https://nightly.link/crosbreaker/chromeos-releases/workflows/build.yaml/main/data.zip"
+versions_url = "https://nightly.link/MercuryWorkshop/chromeos-versions/workflows/build/main/data.zip"
 
 def fetch_all_versions():
   print(f"GET {versions_url}")
