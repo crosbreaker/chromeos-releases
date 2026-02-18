@@ -4,7 +4,7 @@ from datetime import datetime
 
 import httpx
 
-import common, versions, googleblog, chrome100, wayback, git, kernver
+import common, versions, googleblog, chrome100, git, wayback
 
 GITHUB_REPO = "crosbreaker/chromeos-releases-data"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}/commits"

@@ -37,48 +37,63 @@ def parse_wayback_cdx(cdx_data):
     last_digest = row[digest_index]
   return timestamps
 
-def fetch_wayback_cdx(cdx_api_url, path, since=None):
-  cdx_data_path = path / "cdx.json"
+# def fetch_wayback_cdx(cdx_api_url, path, since=None):
+#   cdx_data_path = path / "cdx.json"
+#
+#   if cdx_data_path.exists():
+#     cdx_json = json.loads(cdx_data_path.read_text())
+#     cached_at = datetime.fromtimestamp(cdx_json["updated"], tz=timezone.utc)
+#     if since and cached_at > since:
+#       return cdx_json["data"]
+#     if time.time() - cdx_json["updated"] < 3600:
+#       return cdx_json["data"]
+#   
+#   print(f"GET {cdx_api_url}")
+#   cdx_response = common.session.get(cdx_api_url)
+#   cdx_data = cdx_response.json()
+#   cdx_json = {
+#     "updated": time.time(),
+#     "data": cdx_data
+#   }
+#   cdx_data_path.write_text(json.dumps(cdx_json, indent=2))
+#   return cdx_data
 
-  if cdx_data_path.exists():
-    cdx_json = json.loads(cdx_data_path.read_text())
-    cached_at = datetime.fromtimestamp(cdx_json["updated"], tz=timezone.utc)
-    if since and cached_at > since:
-      return cdx_json["data"]
-    if time.time() - cdx_json["updated"] < 3600:
-      return cdx_json["data"]
-  
-  print(f"GET {cdx_api_url}")
-  cdx_response = common.session.get(cdx_api_url)
-  cdx_data = cdx_response.json()
-  cdx_json = {
-    "updated": time.time(),
-    "data": cdx_data
-  }
-  cdx_data_path.write_text(json.dumps(cdx_json, indent=2))
-  return cdx_data
+# def fetch_wayback_snapshots(url, path, since=None):
+#   cdx_api_url = cdx_api_url_template.format(url=url)
+#   cdx_data = fetch_wayback_cdx(cdx_api_url, path, since=since)
+#
+#   snapshots = []
+#   for timestamp in parse_wayback_cdx(cdx_data):
+#     snapshot_path = path / f"{timestamp}.json"
+#     
+#     if snapshot_path.exists():
+#       snapshot = json.loads(snapshot_path.read_text())
+#     
+#     else:
+#       identity_url = f"https://web.archive.org/web/{timestamp}id_/{url}"
+#
+#       print(f"GET {identity_url}")
+#       snapshot_response = common.session.get(identity_url)
+#       snapshot = snapshot_response.json()
+#       snapshot_path.write_text(json.dumps(snapshot, indent=2))
+#     
+#     snapshots.append(snapshot)
+#   
+#   return snapshots
 
-def fetch_wayback_snapshots(url, path, since=None):
-  cdx_api_url = cdx_api_url_template.format(url=url)
-  cdx_data = fetch_wayback_cdx(cdx_api_url, path, since=since)
-
+def load_local_snapshots(path):
   snapshots = []
-  for timestamp in parse_wayback_cdx(cdx_data):
-    snapshot_path = path / f"{timestamp}.json"
-    
-    if snapshot_path.exists():
-      snapshot = json.loads(snapshot_path.read_text())
-    
-    else:
-      identity_url = f"https://web.archive.org/web/{timestamp}id_/{url}"
+  if not path.exists():
+    return snapshots
 
-      print(f"GET {identity_url}")
-      snapshot_response = common.session.get(identity_url)
-      snapshot = snapshot_response.json()
-      snapshot_path.write_text(json.dumps(snapshot, indent=2))
-    
-    snapshots.append(snapshot)
-  
+  for file in sorted(path.glob("*.json")):
+    if file.name == "cdx.json":
+      continue
+    try:
+      snapshots.append(json.loads(file.read_text()))
+    except:
+      pass
+
   return snapshots
 
 def parse_board_data(board, board_data, dl_urls):
@@ -99,7 +114,7 @@ def parse_dash_snapshots(snapshots):
   dl_urls = set()
 
   for snapshot in snapshots:
-    for board, board_data in snapshot["builds"].items():
+    for board, board_data in snapshot.get("builds", {}).items():
       parse_board_data(board, board_data, dl_urls)
   
   data = defaultdict(list)
@@ -193,8 +208,10 @@ def get_wayback_data(since=None):
     category_path = downloads_path / "dash" / category.lower().replace(" ", "_")
     category_path.mkdir(exist_ok=True, parents=True)
 
-    chrome_dash_url = chrome_dash_url_template.format(category=category)
-    dash_snapshots = fetch_wayback_snapshots(chrome_dash_url, category_path, since=since)
+    # chrome_dash_url = chrome_dash_url_template.format(category=category)
+    # dash_snapshots = fetch_wayback_snapshots(chrome_dash_url, category_path, since=since)
+
+    dash_snapshots = load_local_snapshots(category_path)
 
     dash_data = parse_dash_snapshots(dash_snapshots)
     fetch_modified_dates(dash_data)
@@ -205,8 +222,10 @@ def get_wayback_data(since=None):
     recovery_path = downloads_path / "recovery" / recovery_name
     recovery_path.mkdir(exist_ok=True, parents=True)
 
-    recovery_url = recovery_json_url_template.format(filename=filename)
-    recovery_snapshots = fetch_wayback_snapshots(recovery_url, recovery_path, since=since)
+    # recovery_url = recovery_json_url_template.format(filename=filename)
+    # recovery_snapshots = fetch_wayback_snapshots(recovery_url, recovery_path, since=since)
+
+    recovery_snapshots = load_local_snapshots(recovery_path)
 
     recovery_data = prase_recovery_data(recovery_snapshots)
     fetch_modified_dates(recovery_data)
