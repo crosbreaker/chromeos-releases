@@ -32,7 +32,7 @@ jobs:
       # inline because idk if gh workflows goes back to the old directory after every cmd like how makefile would
       - name: download old artifacts
         run: |
-          wget https://github.com/crosbreaker/chromeos-releases-data/raw/main/downloads.tgz
+          wget https://github.com/xXMariahScaryXx/chromeos-releases-data/raw/main/downloads.tgz
           mkdir -p downloads
           tar xvf downloads.tgz -C downloads/
           rm -rf downloads.tgz
@@ -63,7 +63,7 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "<>"
           cd data
-          git clone "https://${{ secrets.GH_TOKEN }}@github.com/crosbreaker/chromeos-releases-data" -b main
+          git clone "https://${{ secrets.GH_TOKEN }}@github.com/xXMariahScaryXx/chromeos-releases-data" -b main
           cd chromeos-releases-data
           cp ../data.json ./
           if [ ! "$(git status -s)" ]; then
