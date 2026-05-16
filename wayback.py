@@ -1,237 +1,253 @@
-import pathlib
 import json
-import time
+import pathlib
 import re
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 
 import common
 import versions
 
-#this module fetches all recovery image data from web.archive.org
+# this module fetches all recovery image data from web.archive.org
 
 downloads_path = common.base_path / "downloads" / "wayback"
 
 recovery_json_files = [
-  "recovery.json", "recovery2.json", "onhub_recovery.json", "workspaceHardware_recovery2.json", 
-  "cloudready_recovery.json", "cloudready_recovery2.json"
+    "recovery.json",
+    "recovery2.json",
+    "onhub_recovery.json",
+    "workspaceHardware_recovery2.json",
+    "cloudready_recovery.json",
+    "cloudready_recovery2.json",
 ]
-device_categories = ["Chrome OS", "ChromeOS", "Chrome OS Flex", "ChromeOS Flex", "Google Meet Hardware"]
+device_categories = [
+    "Chrome OS",
+    "ChromeOS",
+    "Chrome OS Flex",
+    "ChromeOS Flex",
+    "Google Meet Hardware",
+]
 
 chrome_dash_url_template = "https://chromiumdash.appspot.com/cros/fetch_serving_builds?deviceCategory={category}"
-recovery_json_url_template = "https://dl.google.com/dl/edgedl/chromeos/recovery/{filename}"
+recovery_json_url_template = (
+    "https://dl.google.com/dl/edgedl/chromeos/recovery/{filename}"
+)
 cdx_api_url_template = "https://web.archive.org/cdx/search/cdx?output=json&url={url}"
 
 dl_url_regex = r"https://dl\.google\.com/dl/edgedl/chromeos/recovery/chromeos_([\d\.]+?)_(.+?)_recovery_(.+?)_.+?\.bin\.zip"
 dl_dates_path = downloads_path / "dates.json"
 
+
 def parse_wayback_cdx(cdx_data):
-  timestamps = []
-  timestamp_index = cdx_data[0].index("timestamp")
-  digest_index = cdx_data[0].index("digest")
-  last_digest = None
-  for row in cdx_data[1:]:
-    if row[digest_index] == last_digest:
-      continue
-    timestamps.append(row[timestamp_index])
-    last_digest = row[digest_index]
-  return timestamps
+    timestamps = []
+    timestamp_index = cdx_data[0].index("timestamp")
+    digest_index = cdx_data[0].index("digest")
+    last_digest = None
+    for row in cdx_data[1:]:
+        if row[digest_index] == last_digest:
+            continue
+        timestamps.append(row[timestamp_index])
+        last_digest = row[digest_index]
+    return timestamps
 
-# def fetch_wayback_cdx(cdx_api_url, path, since=None):
-#   cdx_data_path = path / "cdx.json"
-#
-#   if cdx_data_path.exists():
-#     cdx_json = json.loads(cdx_data_path.read_text())
-#     cached_at = datetime.fromtimestamp(cdx_json["updated"], tz=timezone.utc)
-#     if since and cached_at > since:
-#       return cdx_json["data"]
-#     if time.time() - cdx_json["updated"] < 3600:
-#       return cdx_json["data"]
-#   
-#   print(f"GET {cdx_api_url}")
-#   cdx_response = common.session.get(cdx_api_url)
-#   cdx_data = cdx_response.json()
-#   cdx_json = {
-#     "updated": time.time(),
-#     "data": cdx_data
-#   }
-#   cdx_data_path.write_text(json.dumps(cdx_json, indent=2))
-#   return cdx_data
 
-# def fetch_wayback_snapshots(url, path, since=None):
-#   cdx_api_url = cdx_api_url_template.format(url=url)
-#   cdx_data = fetch_wayback_cdx(cdx_api_url, path, since=since)
-#
-#   snapshots = []
-#   for timestamp in parse_wayback_cdx(cdx_data):
-#     snapshot_path = path / f"{timestamp}.json"
-#     
-#     if snapshot_path.exists():
-#       snapshot = json.loads(snapshot_path.read_text())
-#     
-#     else:
-#       identity_url = f"https://web.archive.org/web/{timestamp}id_/{url}"
-#
-#       print(f"GET {identity_url}")
-#       snapshot_response = common.session.get(identity_url)
-#       snapshot = snapshot_response.json()
-#       snapshot_path.write_text(json.dumps(snapshot, indent=2))
-#     
-#     snapshots.append(snapshot)
-#   
-#   return snapshots
+def fetch_wayback_cdx(cdx_api_url, path, since=None):
+    cdx_data_path = path / "cdx.json"
 
-def load_local_snapshots(path):
-  snapshots = []
-  if not path.exists():
+    if cdx_data_path.exists():
+        cdx_json = json.loads(cdx_data_path.read_text())
+        cached_at = datetime.fromtimestamp(cdx_json["updated"], tz=timezone.utc)
+        if since and cached_at > since:
+            return cdx_json["data"]
+        if time.time() - cdx_json["updated"] < 3600:
+            return cdx_json["data"]
+
+    for attempt in range(5):
+        try:
+            print(f"GET {cdx_api_url} (attempt {attempt + 1})")
+            cdx_response = common.session.get(cdx_api_url, timeout=30)
+            cdx_response.raise_for_status()
+            cdx_data = cdx_response.json()
+            break
+        except Exception as e:
+            if attempt == 4:
+                raise
+            wait = 2**attempt
+            print(f"  Failed ({e}), retrying in {wait}s...")
+            time.sleep(wait)
+
+    cdx_json = {"updated": time.time(), "data": cdx_data}
+    cdx_data_path.write_text(json.dumps(cdx_json, indent=2))
+    return cdx_data
+
+
+def fetch_wayback_snapshots(url, path, since=None):
+    cdx_api_url = cdx_api_url_template.format(url=url)
+    cdx_data = fetch_wayback_cdx(cdx_api_url, path, since=since)
+
+    snapshots = []
+    for timestamp in parse_wayback_cdx(cdx_data):
+        snapshot_path = path / f"{timestamp}.json"
+
+        if snapshot_path.exists():
+            snapshot = json.loads(snapshot_path.read_text())
+
+        else:
+            identity_url = f"https://web.archive.org/web/{timestamp}id_/{url}"
+
+            print(f"GET {identity_url}")
+            snapshot_response = common.session.get(identity_url)
+            snapshot = snapshot_response.json()
+            snapshot_path.write_text(json.dumps(snapshot, indent=2))
+
+        snapshots.append(snapshot)
+
     return snapshots
 
-  for file in sorted(path.glob("*.json")):
-    if file.name == "cdx.json":
-      continue
-    try:
-      snapshots.append(json.loads(file.read_text()))
-    except:
-      pass
-
-  return snapshots
 
 def parse_board_data(board, board_data, dl_urls):
-  for key, value in board_data.items():
-    if key == "pushRecoveries":
-      dl_urls |= set(value.values())
-    elif key == "brandNames":
-      common.device_names[board] |= set(value)
+    for key, value in board_data.items():
+        if key == "pushRecoveries":
+            dl_urls |= set(value.values())
+        elif key == "brandNames":
+            common.device_names[board] |= set(value)
 
-    elif isinstance(value, dict):
-      if "version" in value:
-        if not value["version"] in common.versions:
-          common.versions[value["version"]] = value["chromeVersion"]
-      else:
-        parse_board_data(board, value, dl_urls)
+        elif isinstance(value, dict):
+            if "version" in value:
+                if not value["version"] in common.versions:
+                    common.versions[value["version"]] = value["chromeVersion"]
+            else:
+                parse_board_data(board, value, dl_urls)
+
 
 def parse_dash_snapshots(snapshots):
-  dl_urls = set()
+    dl_urls = set()
 
-  for snapshot in snapshots:
-    for board, board_data in snapshot.get("builds", {}).items():
-      parse_board_data(board, board_data, dl_urls)
-  
-  data = defaultdict(list)
-  for dl_url in dl_urls:
-    matches = re.findall(dl_url_regex, dl_url)[0]
-    platform_version, board, channel = matches
+    for snapshot in snapshots:
+        for board, board_data in snapshot["builds"].items():
+            parse_board_data(board, board_data, dl_urls)
 
-    chrome_version = versions.get_chrome_version(platform_version)
-    if not chrome_version:
-      print(f"Warning: could not find chrome version for {dl_url}")
-      continue
+    data = defaultdict(list)
+    for dl_url in dl_urls:
+        matches = re.findall(dl_url_regex, dl_url)[0]
+        platform_version, board, channel = matches
 
-    image = {
-      "platform_version": platform_version,
-      "chrome_version": chrome_version,
-      "channel": channel,
-      "last_modified": None,
-      "url": dl_url
-    }
-    data[board].append(image)
-  
-  return data
-
-def prase_recovery_data(snapshots):
-  dl_urls = set()
-  data = defaultdict(list)
-
-  for snapshot in snapshots:
-    for item in snapshot:
-      matches = re.findall(dl_url_regex, item["url"])[0]
-      platform_version, board, channel = matches
-      common.hwid_matches[board].add(item["hwidmatch"])
-
-      if "chrome_version" in item:
-        chrome_version = item["chrome_version"]
-      else:
         chrome_version = versions.get_chrome_version(platform_version)
         if not chrome_version:
-          print(f"Warning: could not find chrome version for {item['url']}")
-          continue
+            print(f"Warning: could not find chrome version for {dl_url}")
+            continue
 
-      image = {
-        "platform_version": platform_version,
-        "chrome_version": chrome_version,
-        "channel": channel,
-        "last_modified": None,
-        "url": item["url"]
-      }
-      if not board in data:
-        data[board] = []
-      data[board].append(image)
-  
-  return data
+        image = {
+            "platform_version": platform_version,
+            "chrome_version": chrome_version,
+            "channel": channel,
+            "last_modified": None,
+            "url": dl_url,
+        }
+        data[board].append(image)
+
+    return data
+
+
+def prase_recovery_data(snapshots):
+    dl_urls = set()
+    data = defaultdict(list)
+
+    for snapshot in snapshots:
+        for item in snapshot:
+            matches = re.findall(dl_url_regex, item["url"])[0]
+            platform_version, board, channel = matches
+            common.hwid_matches[board].add(item["hwidmatch"])
+
+            if "chrome_version" in item:
+                chrome_version = item["chrome_version"]
+            else:
+                chrome_version = versions.get_chrome_version(platform_version)
+                if not chrome_version:
+                    print(f"Warning: could not find chrome version for {item['url']}")
+                    continue
+
+            image = {
+                "platform_version": platform_version,
+                "chrome_version": chrome_version,
+                "channel": channel,
+                "last_modified": None,
+                "url": item["url"],
+            }
+            if not board in data:
+                data[board] = []
+            data[board].append(image)
+
+    return data
+
 
 def fetch_modified_dates(data):
-  dates = {}
-  if dl_dates_path.exists():
-    dates = json.loads(dl_dates_path.read_text())
-  
-  i = 1
-  for board, images in data.items():
-    for image in images:
-      dl_url = image["url"]
-      
-      if dl_url in dates:
-        last_modified = dates[dl_url]
-      elif dl_url in common.dates:
-        last_modified = common.dates[dl_url]
-      
-      else:
-        print(f"HEAD ({i}) {dl_url}")
-        i += 1
-        dl_response = common.session.head(dl_url)
-        timestamp_raw = dl_response.headers["Last-Modified"]
-        
-        timestamp_pattern = "%a, %d %b %Y %H:%M:%S %Z"
-        last_modified_dt = datetime.strptime(timestamp_raw, timestamp_pattern)
-        last_modified = int((last_modified_dt - datetime(1970, 1, 1)).total_seconds())
-        dates[dl_url] = last_modified
-      
-      image["last_modified"] = last_modified
-    
-  dl_dates_path.write_text(json.dumps(dates, indent=2))
-  common.dates.update(dates)
+    dates = {}
+    if dl_dates_path.exists():
+        dates = json.loads(dl_dates_path.read_text())
+
+    i = 1
+    for board, images in data.items():
+        for image in images:
+            dl_url = image["url"]
+
+            if dl_url in dates:
+                last_modified = dates[dl_url]
+            elif dl_url in common.dates:
+                last_modified = common.dates[dl_url]
+
+            else:
+                print(f"HEAD ({i}) {dl_url}")
+                i += 1
+                dl_response = common.session.head(dl_url)
+                timestamp_raw = dl_response.headers["Last-Modified"]
+
+                timestamp_pattern = "%a, %d %b %Y %H:%M:%S %Z"
+                last_modified_dt = datetime.strptime(timestamp_raw, timestamp_pattern)
+                last_modified = int(
+                    (last_modified_dt - datetime(1970, 1, 1)).total_seconds()
+                )
+                dates[dl_url] = last_modified
+
+            image["last_modified"] = last_modified
+
+    dl_dates_path.write_text(json.dumps(dates, indent=2))
+    common.dates.update(dates)
+
 
 def get_wayback_data(since=None):
-  data_sources = []
-  downloads_path.mkdir(exist_ok=True)
+    data_sources = []
+    downloads_path.mkdir(exist_ok=True)
 
-  for category in device_categories:
-    category_path = downloads_path / "dash" / category.lower().replace(" ", "_")
-    category_path.mkdir(exist_ok=True, parents=True)
+    for category in device_categories:
+        category_path = downloads_path / "dash" / category.lower().replace(" ", "_")
+        category_path.mkdir(exist_ok=True, parents=True)
 
-    # chrome_dash_url = chrome_dash_url_template.format(category=category)
-    # dash_snapshots = fetch_wayback_snapshots(chrome_dash_url, category_path, since=since)
+        chrome_dash_url = chrome_dash_url_template.format(category=category)
+        dash_snapshots = fetch_wayback_snapshots(
+            chrome_dash_url, category_path, since=since
+        )
 
-    dash_snapshots = load_local_snapshots(category_path)
+        dash_data = parse_dash_snapshots(dash_snapshots)
+        fetch_modified_dates(dash_data)
+        data_sources.append(dash_data)
 
-    dash_data = parse_dash_snapshots(dash_snapshots)
-    fetch_modified_dates(dash_data)
-    data_sources.append(dash_data)
-  
-  for filename in recovery_json_files:
-    recovery_name = filename.split(".")[0]
-    recovery_path = downloads_path / "recovery" / recovery_name
-    recovery_path.mkdir(exist_ok=True, parents=True)
+    for filename in recovery_json_files:
+        recovery_name = filename.split(".")[0]
+        recovery_path = downloads_path / "recovery" / recovery_name
+        recovery_path.mkdir(exist_ok=True, parents=True)
 
-    # recovery_url = recovery_json_url_template.format(filename=filename)
-    # recovery_snapshots = fetch_wayback_snapshots(recovery_url, recovery_path, since=since)
+        recovery_url = recovery_json_url_template.format(filename=filename)
+        recovery_snapshots = fetch_wayback_snapshots(
+            recovery_url, recovery_path, since=since
+        )
 
-    recovery_snapshots = load_local_snapshots(recovery_path)
+        recovery_data = prase_recovery_data(recovery_snapshots)
+        fetch_modified_dates(recovery_data)
+        data_sources.append(recovery_data)
 
-    recovery_data = prase_recovery_data(recovery_snapshots)
-    fetch_modified_dates(recovery_data)
-    data_sources.append(recovery_data)
+    return data_sources
 
-  return data_sources
 
 if __name__ == "__main__":
-  get_wayback_data()
+    get_wayback_data()
