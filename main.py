@@ -97,9 +97,8 @@ if __name__ == "__main__":
 
   print("\nFetching...")
   versions.fetch_all_versions()
-  googleblog.fetch_versions_since(since=last_updated)
 
-  sources = [chrome100.get_chrome100_data(), *wayback.get_wayback_data(since=last_updated), *git.get_git_data()]
+  sources = [*wayback.get_wayback_data(since=last_updated), *git.get_git_data()]
   if existing_data:
     sources.insert(0, existing_data_as_source(existing_data))
 

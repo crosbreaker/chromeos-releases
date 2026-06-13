@@ -55,7 +55,7 @@ def fetch_blog_page(url):
     return page_info["next_url"]
 
   print(f"GET {url}")
-  response = common.session.get(url)
+  response = common.session.get(url, timeout=30)
   response.raise_for_status()
   document = lxml.html.fromstring(response.text)
 
@@ -147,7 +147,6 @@ def _crawl_from(url):
     except IndexError:
       time.sleep(5)
       url = fetch_blog_page(url)
-
 
 def fetch_all_versions():
   downloads_path.mkdir(exist_ok=True, parents=True)
